@@ -1,0 +1,56 @@
+CREATE TABLE colleges (
+    college_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    contact_email VARCHAR(100) UNIQUE NOT NULL,
+    contact_phone VARCHAR(15) NOT NULL,
+    website VARCHAR(255),
+    established_year YEAR,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    college_id INT,
+    name VARCHAR(255) NOT NULL,
+    FOREIGN KEY (college_id) REFERENCES colleges(college_id) ON DELETE CASCADE
+);
+CREATE TABLE admins (
+    admin_id INT AUTO_INCREMENT PRIMARY KEY,
+    college_id INT UNIQUE,  -- Each college has one admin
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (college_id) REFERENCES colleges(college_id) ON DELETE CASCADE
+);
+CREATE TABLE students (
+    student_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone VARCHAR(15),
+    roll_number VARCHAR(50) UNIQUE NOT NULL,
+    college_id INT,
+    department_id INT,
+    graduation_year YEAR,
+    cgpa DECIMAL(3,2),
+    resume_link TEXT,
+    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (college_id) REFERENCES colleges(college_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+CREATE TABLE jobs (
+    job_id INT AUTO_INCREMENT PRIMARY KEY,
+    college_id INT,
+    department_id INT,
+    title VARCHAR(255) NOT NULL,
+    job_type ENUM('Internship', 'Full-time') NOT NULL,
+    salary DECIMAL(10,2),
+    location VARCHAR(255),
+    description TEXT,
+    requirements TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (college_id) REFERENCES colleges(college_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
