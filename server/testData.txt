@@ -1,0 +1,2 @@
+USE college_placement;
+INSERT INTO colleges (name, location, contact_email,contact_phone) VALUES ('Test College', 'City Name','test@gmail.com','7499121201');
