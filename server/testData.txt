@@ -1,2 +1,22 @@
 USE college_placement;
 INSERT INTO colleges (name, location, contact_email,contact_phone) VALUES ('Test College', 'City Name','test@gmail.com','7499121201');
+
+
+ INSERT INTO departments (college_id, name)
+VALUES (1, 'Computer Engineering');
+
+
+{
+  "college_id": 1,
+  "department_id": 1,
+  "roll_number": "CS123",
+  "name": "John Doe",
+  "email": "johndoe@example.com",
+  "password": "securepassword"
+}
+
+{ //updated
+  "name": "Danish Chandargi",
+  "email": "Danishchandargi@gmail.com",
+  "password":"Dan123"
+}
