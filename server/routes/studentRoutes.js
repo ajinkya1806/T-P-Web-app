@@ -78,10 +78,14 @@ router.post("/login", async (req, res) => {
 
 router.get("/profile", authMiddleware, async (req, res) => {
     try {
-        const studentId = req.user.studentId; // Retrieved from JWT token
+        console.log("🔹 Middleware attached studentId:", req.studentId); // Debugging log
+
+        if (!req.studentId) {
+            return res.status(400).json({ message: "No student ID found in request" });
+        }
 
         // Fetch student details
-        const [student] = await db.execute("SELECT * FROM students WHERE student_id = ?", [studentId]);
+        const [student] = await db.execute("SELECT * FROM students WHERE student_id = ?", [req.studentId]);
 
         if (student.length === 0) {
             return res.status(404).json({ message: "Student not found" });
@@ -93,7 +97,6 @@ router.get("/profile", authMiddleware, async (req, res) => {
         res.status(500).json({ message: "Server error", error: err.message });
     }
 });
-
 // **Update Student Profile (Protected)**
 router.put("/profile", authMiddleware, async (req, res) => {
     try {
