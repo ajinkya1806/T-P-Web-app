@@ -1,25 +1,26 @@
-require("dotenv").config();
-const mysql = require("mysql2");
+const { Pool } = require("pg");
+require("dotenv").config(); 
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-});
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL, // Use PostgreSQL connection URL
+    ssl: { rejectUnauthorized: false }, // Required for Render DB
+  });
+
 
 // Test DB connection
-pool.getConnection((err, connection) => {
-    if (err) {
-        console.error("Database connection failed:", err);
-    } else {
-        console.log("✅ Connected to MariaDB");
-        connection.release(); // Release the connection
-    }
-});
+pool.connect()
+  .then(() => console.log("Connected to PostgreSQL on Render"))
+  .catch(err => console.error("Database connection error:", err));
 
-module.exports = pool.promise(); // Export the pool for querying
+  const test_query = "SELECT * FROM students;";
+//   console.log(test_query);
+  pool.query(test_query, (err, res) => {
+    if (err) {
+      console.error("Error running query:", err);
+    } else {
+      console.log("Students:", res.rows);
+    }
+  });
+  
+
+module.exports = pool;

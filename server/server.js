@@ -5,13 +5,15 @@ require("dotenv").config(); // Load environment variables
 const db = require("./config/db");
 const adminRoutes = require("./routes/adminRoutes"); // admin Signup and login
 const studentRoutes = require("./routes/studentRoutes"); // student Signup and login
-const port = 5000; // Port number for your backend
+const port = process.env.DB_PORT || 5000; // Port number for your backend
 
 // Middleware to parse JSON requests
 app.use(express.json());
 app.use(cors());
+
 // app.use("/api/admin", adminRoutes);
 app.use("/api/students", studentRoutes);
+
 // Basic Route
 app.get('/', (req, res) => {
     res.send('This server is runnning!');
