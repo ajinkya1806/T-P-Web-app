@@ -1,128 +1,149 @@
+/**
+ * AdminHome — Dashboard with real stats from /api/admin/stats
+ * Uses React Query for fetching and caching.
+ */
 import React from "react";
-import {
-  BarChart2,
-  Users,
-  Building2,
-  TrendingUp,
-  Calendar,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { Users, Briefcase, TrendingUp, Calendar, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { getAdminStats } from "../../api";
+
+function StatCard({ title, value, icon: Icon, color, sub, to }) {
+  const card = (
+    <div className={`card flex items-start gap-4 hover:border-white/20 transition-all duration-200 group`}>
+      <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-white/40 uppercase tracking-widest font-medium">{title}</p>
+        <p className="mt-1 text-2xl font-bold text-white">{value ?? "—"}</p>
+        {sub && <p className="mt-0.5 text-xs text-white/40">{sub}</p>}
+      </div>
+    </div>
+  );
+  return to ? <Link to={to}>{card}</Link> : card;
+}
 
 export function AdminHome() {
-  const stats = [
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["adminStats"],
+    queryFn: getAdminStats,
+    refetchInterval: 30000,
+  });
+
+  const stats = data?.data;
+
+  const cards = [
     {
       title: "Total Students",
-      value: "1,234",
-      icon: <Users className="h-6 w-6 text-blue-600" />,
-      trend: { value: 12, isPositive: true },
+      value: isLoading ? "…" : stats?.totalStudents ?? 0,
+      icon: Users,
+      color: "bg-indigo-600",
+      sub: `${stats?.placedStudents ?? 0} placed`,
+      to: "/admin/students",
     },
     {
       title: "Placement Rate",
-      value: "92%",
-      icon: <TrendingUp className="h-6 w-6 text-blue-600" />,
-      trend: { value: 8, isPositive: true },
+      value: isLoading ? "…" : stats?.totalStudents
+        ? `${Math.round((stats.placedStudents / stats.totalStudents) * 100)}%`
+        : "N/A",
+      icon: TrendingUp,
+      color: "bg-emerald-600",
+      sub: `${stats?.unplacedStudents ?? 0} unplaced`,
     },
     {
-      title: "Active Companies",
-      value: "45",
-      icon: <Building2 className="h-6 w-6 text-blue-600" />,
-      trend: { value: 15, isPositive: true },
+      title: "Active Jobs",
+      value: isLoading ? "…" : stats?.activeJobs ?? 0,
+      icon: Briefcase,
+      color: "bg-amber-600",
+      sub: "open postings",
+      to: "/admin/jobs",
     },
     {
-      title: "Average Package",
-      value: "₹8.5 LPA",
-      icon: <BarChart2 className="h-6 w-6 text-blue-600" />,
-      trend: { value: 10, isPositive: true },
+      title: "Total Applications",
+      value: isLoading ? "…" : stats?.totalApplications ?? 0,
+      icon: CheckCircle,
+      color: "bg-blue-600",
+      sub: "all time",
+      to: "/admin/applications",
     },
   ];
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Welcome back! Here's what's happening today.
-        </p>
+        <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+        <p className="mt-1 text-sm text-white/40">Real-time placement overview</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <div
-            key={stat.title}
-            className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow duration-200"
-          >
-            <div className="flex items-center">
-              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                {stat.icon}
-              </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {stat.title}
-                </h3>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stat.value}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4">
-              <span
-                className={`inline-flex items-center text-sm font-medium ${
-                  stat.trend.isPositive ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {stat.trend.isPositive ? "↑" : "↓"} {stat.trend.value}%
-              </span>
-            </div>
-          </div>
+      {/* Error state */}
+      {isError && (
+        <div className="card border-red-500/30 bg-red-500/10 text-red-400 text-sm flex items-center gap-2">
+          <XCircle className="h-4 w-4 shrink-0" />
+          Failed to load statistics. Is the Flask server running?
+        </div>
+      )}
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c) => (
+          <StatCard key={c.title} {...c} />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activities */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Recent Activities
-          </h2>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex items-start space-x-4 p-3 hover:bg-gray-50 rounded-md"
-              >
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Users className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    New student registration
-                  </p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Bottom grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Placed vs Unplaced */}
+        <div className="card space-y-4">
+          <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wider">Placement Breakdown</h2>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { label: "Placed", value: stats?.placedStudents ?? 0, color: "bg-emerald-500" },
+                { label: "Unplaced", value: stats?.unplacedStudents ?? 0, color: "bg-amber-500" },
+              ].map(({ label, value, color }) => {
+                const total = (stats?.totalStudents || 1);
+                const pct = Math.round((value / total) * 100);
+                return (
+                  <div key={label}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-white/60">{label}</span>
+                      <span className="text-white font-medium">{value} <span className="text-white/40">({pct}%)</span></span>
+                    </div>
+                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Upcoming Events */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Upcoming Events
-          </h2>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex items-start space-x-4 p-3 hover:bg-gray-50 rounded-md"
+        {/* Quick links */}
+        <div className="card space-y-4">
+          <h2 className="text-sm font-semibold text-white/70 uppercase tracking-wider">Quick Actions</h2>
+          <div className="space-y-2">
+            {[
+              { label: "Manage Students", to: "/admin/students", icon: Users },
+              { label: "Post a Job", to: "/admin/jobs", icon: Briefcase },
+              { label: "Schedule Event", to: "/admin/events", icon: Calendar },
+              { label: "Review Applications", to: "/admin/applications", icon: CheckCircle },
+            ].map(({ label, to, icon: Icon }) => (
+              <Link
+                key={label}
+                to={to}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10
+                  text-sm text-white/70 hover:text-white transition-all duration-150"
               >
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Calendar className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Tech Corp Campus Drive
-                  </p>
-                  <p className="text-xs text-gray-500">Tomorrow, 10:00 AM</p>
-                </div>
-              </div>
+                <Icon className="h-4 w-4 text-indigo-400" />
+                {label}
+              </Link>
             ))}
           </div>
         </div>

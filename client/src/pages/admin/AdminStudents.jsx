@@ -1,306 +1,279 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Search, Filter, Edit, Trash2 } from "lucide-react";
-import { Modal } from "../../components/Modal";
-import { StudentForm } from "../../components/forms/StudentForm";
+/**
+ * AdminStudents — View & manage students, wired to real API via React Query.
+ * Add students via the auth endpoint; edit profile data inline.
+ */
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, Edit, Trash2, Users, Loader2, XCircle, CheckCircle } from "lucide-react";
+import { getStudents, updateStudent, deleteStudent, registerStudent } from "../../api";
+import { useToast } from "../../context/ToastContext";
 
-// Create dummy students data
-const dummyStudents = [
-  {
-    id: 1,
-    name: "Rahul Sharma",
-    email: "rahul.sharma@example.com",
-    rollNumber: "CS2020001",
-    branch: "Computer Science",
-    year: 4,
-    cgpa: "9.2",
-    phone: "9876543210",
-    resume: null,
-    createdAt: new Date("2024-03-15").toISOString(),
-  },
-  {
-    id: 2,
-    name: "Priya Patel",
-    email: "priya.patel@example.com",
-    rollNumber: "EC2020015",
-    branch: "Electronics",
-    year: 4,
-    cgpa: "8.7",
-    phone: "9876543211",
-    resume: null,
-    createdAt: new Date("2024-03-18").toISOString(),
-  },
-  {
-    id: 3,
-    name: "Amit Kumar",
-    email: "amit.kumar@example.com",
-    rollNumber: "ME2020032",
-    branch: "Mechanical",
-    year: 4,
-    cgpa: "8.5",
-    phone: "9876543212",
-    resume: null,
-    createdAt: new Date("2024-03-20").toISOString(),
-  },
-  {
-    id: 4,
-    name: "Sneha Gupta",
-    email: "sneha.gupta@example.com",
-    rollNumber: "CS2020045",
-    branch: "Computer Science",
-    year: 4,
-    cgpa: "9.5",
-    phone: "9876543213",
-    resume: null,
-    createdAt: new Date("2024-03-22").toISOString(),
-  },
-  {
-    id: 5,
-    name: "Vikram Singh",
-    email: "vikram.singh@example.com",
-    rollNumber: "CE2020028",
-    branch: "Civil",
-    year: 4,
-    cgpa: "8.3",
-    phone: "9876543214",
-    resume: null,
-    createdAt: new Date("2024-03-25").toISOString(),
-  },
-  {
-    id: 6,
-    name: "Neha Verma",
-    email: "neha.verma@example.com",
-    rollNumber: "CH2020019",
-    branch: "Chemical",
-    year: 4,
-    cgpa: "8.9",
-    phone: "9876543215",
-    resume: null,
-    createdAt: new Date("2024-03-28").toISOString(),
-  },
-];
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function Modal({ isOpen, onClose, title, children }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-[#1a1d27] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
+const field = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 transition-all";
+const BRANCHES = ["CS", "IT", "EXTC", "Mechanical", "Civil", "Chemical", "Electrical"];
+
+// ── Add Student Form ──────────────────────────────────────────────────────────
+function AddStudentForm({ onSubmit, onCancel, isSubmitting }) {
+  const [form, setForm] = useState({ name:"", email:"", password:"", prn:"", branch:"CS", year:3 });
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Full Name *</label>
+          <input required className={field} placeholder="Student name" value={form.name} onChange={set("name")} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Email *</label>
+          <input required type="email" className={field} placeholder="student@college.edu" value={form.email} onChange={set("email")} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Password *</label>
+          <input required type="password" className={field} placeholder="Min 6 characters" value={form.password} onChange={set("password")} />
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">PRN</label>
+          <input className={field} placeholder="PRN2021001" value={form.prn} onChange={set("prn")} />
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">Year</label>
+          <select className={field} value={form.year} onChange={(e) => setForm((p) => ({ ...p, year: Number(e.target.value) }))}>
+            {[1,2,3,4].map((y) => <option key={y} value={y}>Year {y}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Branch</label>
+          <select className={field} value={form.branch} onChange={set("branch")}>
+            {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button type="button" onClick={onCancel}
+          className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all">Cancel</button>
+        <button type="submit" disabled={isSubmitting}
+          className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-sm font-semibold text-white transition-all flex items-center justify-center gap-2">
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />} Add Student
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── Edit Student Form ─────────────────────────────────────────────────────────
+function EditStudentForm({ student, onSubmit, onCancel, isSubmitting }) {
+  const [form, setForm] = useState({
+    name:      student.name ?? "",
+    branch:    student.branch ?? "",
+    year:      student.year ?? 1,
+    cgpa:      student.cgpa ?? 0,
+    prn:       student.prn ?? "",
+    resumeUrl: student.resumeUrl ?? "",
+    status:    student.status ?? "Unplaced",
+  });
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Full Name</label>
+          <input className={field} value={form.name} onChange={set("name")} />
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">Branch</label>
+          <select className={field} value={form.branch} onChange={set("branch")}>
+            {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">Year</label>
+          <select className={field} value={form.year} onChange={(e) => setForm((p) => ({ ...p, year: Number(e.target.value) }))}>
+            {[1,2,3,4].map((y) => <option key={y} value={y}>Year {y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">CGPA</label>
+          <input type="number" step="0.1" min="0" max="10" className={field} value={form.cgpa}
+            onChange={(e) => setForm((p) => ({ ...p, cgpa: parseFloat(e.target.value) }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">Placement Status</label>
+          <select className={field} value={form.status} onChange={set("status")}>
+            <option>Unplaced</option>
+            <option>Placed</option>
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">PRN</label>
+          <input className={field} value={form.prn} onChange={set("prn")} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-white/50 mb-1">Resume URL</label>
+          <input type="url" className={field} placeholder="https://drive.google.com/..." value={form.resumeUrl} onChange={set("resumeUrl")} />
+        </div>
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button type="button" onClick={onCancel}
+          className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all">Cancel</button>
+        <button type="submit" disabled={isSubmitting}
+          className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-sm font-semibold text-white transition-all flex items-center justify-center gap-2">
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />} Save Changes
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export function AdminStudents() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("all");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
-  const [students, setStudents] = useState(dummyStudents);
+  const toast = useToast();
+  const qc    = useQueryClient();
 
-  // Load students from localStorage on component mount
-  useEffect(() => {
-    try {
-      const savedStudents = localStorage.getItem("students");
-      if (savedStudents) {
-        const parsedStudents = JSON.parse(savedStudents);
-        // Only use saved students if the array is not empty
-        if (parsedStudents && parsedStudents.length > 0) {
-          setStudents(parsedStudents);
-        } else {
-          // If empty array, use dummy data and save to localStorage
-          localStorage.setItem("students", JSON.stringify(dummyStudents));
-        }
-      } else {
-        // If no data in localStorage, save dummy data
-        localStorage.setItem("students", JSON.stringify(dummyStudents));
-      }
-    } catch (error) {
-      console.error("Error loading students:", error);
-      // If error, use dummy data
-      setStudents(dummyStudents);
-      localStorage.setItem("students", JSON.stringify(dummyStudents));
-    }
-  }, []);
+  const [search, setSearch]   = useState("");
+  const [branchF, setBranchF] = useState("all");
+  const [modal, setModal]     = useState(null); // null | "add" | student-object
 
-  // Save students to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("students", JSON.stringify(students));
-  }, [students]);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["students"],
+    queryFn:  () => getStudents(),
+  });
 
-  const handleSubmitStudent = (formData) => {
-    if (editingStudent) {
-      // Update existing student
-      setStudents(
-        students.map((student) =>
-          student.id === editingStudent.id
-            ? { ...student, ...formData }
-            : student
-        )
-      );
-    } else {
-      // Add new student
-      const newStudent = {
-        id: Date.now(), // Use timestamp as unique ID
-        ...formData,
-        createdAt: new Date().toISOString(),
-      };
-      setStudents([...students, newStudent]);
-    }
-    setIsModalOpen(false);
-    setEditingStudent(null);
-  };
+  const students = (data?.data ?? []).filter((s) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || s.name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q) || s.prn?.toLowerCase().includes(q);
+    const matchBranch = branchF === "all" || s.branch === branchF;
+    return matchSearch && matchBranch;
+  });
 
-  const handleEditStudent = (student) => {
-    setEditingStudent(student);
-    setIsModalOpen(true);
-  };
+  const addMut = useMutation({
+    mutationFn: registerStudent,
+    onSuccess: () => { qc.invalidateQueries(["students"]); toast("Student added!", "success"); setModal(null); },
+    onError: (e) => toast(e?.response?.data?.error ?? "Failed to add student", "error"),
+  });
 
-  const handleDeleteStudent = (studentId) => {
-    if (window.confirm("Are you sure you want to delete this student?")) {
-      setStudents(students.filter((student) => student.id !== studentId));
-    }
-  };
+  const editMut = useMutation({
+    mutationFn: ({ id, data }) => updateStudent(id, data),
+    onSuccess: () => { qc.invalidateQueries(["students"]); toast("Student updated!", "success"); setModal(null); },
+    onError: (e) => toast(e?.response?.data?.error ?? "Failed to update", "error"),
+  });
 
-  const filteredStudents = students.filter((student) => {
-    const searchLower = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      searchLower === "" ||
-      student.name.toLowerCase().includes(searchLower) ||
-      student.email.toLowerCase().includes(searchLower) ||
-      student.rollNumber.toLowerCase().includes(searchLower) ||
-      student.branch.toLowerCase().includes(searchLower);
-    const matchesBranch =
-      selectedBranch === "all" || student.branch === selectedBranch;
-    return matchesSearch && matchesBranch;
+  const delMut = useMutation({
+    mutationFn: deleteStudent,
+    onSuccess: () => { qc.invalidateQueries(["students"]); toast("Student removed", "success"); },
+    onError: (e) => toast(e?.response?.data?.error ?? "Failed to delete", "error"),
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900">Students</h1>
-        <button
-          onClick={() => {
-            setEditingStudent(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          Add Student
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Students</h1>
+          <p className="text-sm text-white/40 mt-0.5">{students.length} student{students.length !== 1 ? "s" : ""}</p>
+        </div>
+        <button onClick={() => setModal("add")}
+          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold text-white transition-all shadow-lg shadow-indigo-500/20">
+          <Plus className="h-4 w-4" /> Add Student
         </button>
       </div>
 
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search students..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
+      {/* Filters */}
+      <div className="flex gap-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, email, PRN…"
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60" />
         </div>
-        <div className="w-48">
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-          >
-            <option value="all">All Branches</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Electronics">Electronics</option>
-            <option value="Mechanical">Mechanical</option>
-            <option value="Civil">Civil</option>
-            <option value="Chemical">Chemical</option>
-          </select>
-        </div>
+        <select value={branchF} onChange={(e) => setBranchF(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white/70 focus:outline-none focus:ring-2 focus:ring-indigo-500/60">
+          <option value="all">All Branches</option>
+          {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+        </select>
       </div>
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Student Details
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Branch & Year
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  CGPA
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
+      {/* Table */}
+      <div className="card !p-0 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-indigo-400" /></div>
+        ) : isError ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-red-400 text-sm"><XCircle className="h-5 w-5" /> Failed to load students</div>
+        ) : students.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-white/30">
+            <Users className="h-10 w-10 mb-3" /><p className="text-sm">No students found</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="border-b border-white/5">
+              <tr className="text-left text-xs uppercase tracking-widest text-white/30">
+                <th className="px-5 py-4 font-medium">Student</th>
+                <th className="px-5 py-4 font-medium">Branch / Year</th>
+                <th className="px-5 py-4 font-medium">CGPA</th>
+                <th className="px-5 py-4 font-medium">Status</th>
+                <th className="px-5 py-4 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredStudents.map((student) => (
-                <tr key={student.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-blue-600">
-                          {student.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {student.email} • {student.rollNumber}
-                        </div>
-                      </div>
+            <tbody className="divide-y divide-white/5">
+              {students.map((s) => (
+                <tr key={s.id} className="hover:bg-white/2 transition-colors">
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-white">{s.name}</p>
+                    <p className="text-white/40 text-xs mt-0.5">{s.email} {s.prn && `• ${s.prn}`}</p>
+                  </td>
+                  <td className="px-5 py-4 text-white/60">{s.branch || "—"} {s.year ? `· Y${s.year}` : ""}</td>
+                  <td className="px-5 py-4 text-white/60">{s.cgpa ?? "—"}</td>
+                  <td className="px-5 py-4">
+                    <span className={s.status === "Placed" ? "badge badge-green" : "badge badge-yellow"}>
+                      {s.status ?? "Unplaced"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setModal(s)} className="text-white/40 hover:text-indigo-400 transition-colors">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => { if (window.confirm(`Delete ${s.name}?`)) delMut.mutate(s.id); }}
+                        className="text-white/40 hover:text-red-400 transition-colors">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.branch} • Year {student.year}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.cgpa}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleEditStudent(student)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      <Edit className="h-5 w-5 inline" />
-                      <span className="ml-1">Edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteStudent(student.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <Trash2 className="h-5 w-5 inline" />
-                      <span className="ml-1">Delete</span>
-                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        )}
       </div>
 
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingStudent(null);
-        }}
-        title={editingStudent ? "Edit Student" : "Add Student"}
-      >
-        <StudentForm
-          onSubmit={handleSubmitStudent}
-          onCancel={() => {
-            setIsModalOpen(false);
-            setEditingStudent(null);
-          }}
-          initialData={editingStudent}
-        />
+      {/* Add Modal */}
+      <Modal isOpen={modal === "add"} onClose={() => setModal(null)} title="Add New Student">
+        <AddStudentForm onSubmit={(d) => addMut.mutate(d)} onCancel={() => setModal(null)} isSubmitting={addMut.isPending} />
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal isOpen={modal && modal !== "add"} onClose={() => setModal(null)} title="Edit Student">
+        {modal && modal !== "add" && (
+          <EditStudentForm student={modal}
+            onSubmit={(d) => editMut.mutate({ id: modal.id, data: d })}
+            onCancel={() => setModal(null)}
+            isSubmitting={editMut.isPending} />
+        )}
       </Modal>
     </div>
   );

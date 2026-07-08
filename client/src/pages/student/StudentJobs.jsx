@@ -1,174 +1,155 @@
+/**
+ * StudentJobs — Browse active jobs and apply with eligibility awareness.
+ * Wired to real API via React Query.
+ */
 import React, { useState } from "react";
-import {
-  Briefcase,
-  Building2,
-  MapPin,
-  Clock,
-  DollarSign,
-  GraduationCap,
-  Search,
-  Filter,
-} from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Search, Briefcase, IndianRupee, Calendar, GraduationCap, CheckCircle, Loader2, XCircle, Send } from "lucide-react";
+import { getJobs, applyToJob, getMyApplications } from "../../api";
+import { useToast } from "../../context/ToastContext";
 
 export function StudentJobs() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
-  const [selectedLocation, setSelectedLocation] = useState("all");
+  const toast = useToast();
+  const qc    = useQueryClient();
+  const [search, setSearch] = useState("");
 
-  const jobs = [
-    {
-      id: 1,
-      title: "Software Engineer",
-      company: "Google",
-      location: "Mountain View, CA",
-      type: "Full Time",
-      salary: "$120,000 - $150,000",
-      requirements: ["B.Tech", "CGPA > 7.5", "React", "Node.js"],
-      deadline: "2024-04-15",
-      description:
-        "We are looking for a talented Software Engineer to join our team...",
-      logo: "https://via.placeholder.com/40",
+  const { data: jobsData, isLoading, isError } = useQuery({
+    queryKey: ["jobs"],
+    queryFn:  () => getJobs({ status: "Active" }),
+  });
+
+  // Fetch existing applications to know what's already applied
+  const { data: appsData } = useQuery({
+    queryKey: ["myApplications"],
+    queryFn:  getMyApplications,
+  });
+
+  const jobs = (jobsData?.data ?? []).filter((j) => {
+    const q = search.toLowerCase();
+    return !q || j.title?.toLowerCase().includes(q) || j.companyName?.toLowerCase().includes(q);
+  });
+
+  const appliedJobIds = new Set(
+    (appsData?.data ?? []).map((a) => a.job?.id).filter(Boolean)
+  );
+
+  const applyMut = useMutation({
+    mutationFn: (jobId) => applyToJob(jobId),
+    onSuccess: (_, jobId) => {
+      qc.invalidateQueries(["myApplications"]);
+      toast("Application submitted successfully!", "success");
     },
-    {
-      id: 2,
-      title: "Product Manager",
-      company: "Microsoft",
-      location: "Redmond, WA",
-      type: "Full Time",
-      salary: "$130,000 - $160,000",
-      requirements: ["B.Tech", "CGPA > 7.5", "Product Management"],
-      deadline: "2024-04-20",
-      description:
-        "Join our product team to help shape the future of technology...",
-      logo: "https://via.placeholder.com/40",
-    },
-    {
-      id: 3,
-      title: "Data Scientist",
-      company: "Amazon",
-      location: "Seattle, WA",
-      type: "Internship",
-      salary: "$8,000/month",
-      requirements: ["B.Tech", "CGPA > 7.5", "Python", "Machine Learning"],
-      deadline: "2024-04-10",
-      description:
-        "Work on cutting-edge data science projects with our team...",
-      logo: "https://via.placeholder.com/40",
-    },
-  ];
+    onError: (e) => toast(e?.response?.data?.error ?? "Failed to apply", "error"),
+  });
+
+  const statusBadge = (jobId) => {
+    const app = (appsData?.data ?? []).find((a) => a.job?.id === jobId);
+    if (!app) return null;
+    const colors = { Applied:"badge-blue", Shortlisted:"badge-green", Hired:"badge-green", Rejected:"badge-red" };
+    return <span className={`badge ${colors[app.status] ?? "badge-gray"}`}>{app.status}</span>;
+  };
 
   return (
     <div className="space-y-6">
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search jobs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Types</option>
-              <option value="full-time">Full Time</option>
-              <option value="internship">Internship</option>
-              <option value="part-time">Part Time</option>
-            </select>
-          </div>
-          <div>
-            <select
-              value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Locations</option>
-              <option value="remote">Remote</option>
-              <option value="onsite">On-site</option>
-              <option value="hybrid">Hybrid</option>
-            </select>
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">Job Board</h1>
+        <p className="text-sm text-white/40 mt-0.5">Active job openings for eligible students</p>
       </div>
 
-      {/* Job Listings */}
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by title or company…"
+          className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60" />
+      </div>
+
+      {/* States */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
+      )}
+      {isError && (
+        <div className="card border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-400 text-sm">
+          <XCircle className="h-4 w-4" /> Failed to load jobs
+        </div>
+      )}
+      {!isLoading && jobs.length === 0 && (
+        <div className="card flex flex-col items-center py-16 text-white/30">
+          <Briefcase className="h-12 w-12 mb-3" />
+          <p>No active job postings right now</p>
+        </div>
+      )}
+
+      {/* Job Cards */}
       <div className="space-y-4">
-        {jobs.map((job) => (
-          <div
-            key={job.id}
-            className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
-          >
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-4">
-                  <img
-                    src={job.logo}
-                    alt={job.company}
-                    className="h-10 w-10 rounded-full"
-                  />
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {job.title}
-                    </h3>
-                    <p className="text-sm text-gray-500">{job.company}</p>
+        {jobs.map((job) => {
+          const applied = appliedJobIds.has(job._id);
+          const isPending = applyMut.isPending && applyMut.variables === job._id;
+
+          return (
+            <div key={job._id} className="card hover:border-white/20 transition-all duration-200">
+              <div className="flex items-start justify-between gap-4">
+                {/* Left: details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base font-semibold text-white">{job.title}</h2>
+                    {statusBadge(job._id)}
                   </div>
-                </div>
-                <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  Apply Now
-                </button>
-              </div>
+                  <p className="text-sm text-indigo-400 mt-0.5">{job.companyName}</p>
 
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex items-center text-sm text-gray-500">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  {job.location}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {job.type}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  {job.salary}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <GraduationCap className="h-4 w-4 mr-1" />
-                  Deadline: {job.deadline}
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-gray-900">
-                  Requirements:
-                </h4>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {job.requirements.map((req, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                    >
-                      {req}
+                  {/* Meta row */}
+                  <div className="flex flex-wrap gap-4 mt-3 text-xs text-white/50">
+                    <span className="flex items-center gap-1">
+                      <IndianRupee className="h-3.5 w-3.5" /> {job.packageLPA} LPA
                     </span>
-                  ))}
-                </div>
-              </div>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Deadline: {job.deadline ? new Date(job.deadline).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" }) : "—"}
+                    </span>
+                    {job.eligibility?.minCgpa > 0 && (
+                      <span className="flex items-center gap-1">
+                        <GraduationCap className="h-3.5 w-3.5" /> Min CGPA: {job.eligibility.minCgpa}
+                      </span>
+                    )}
+                  </div>
 
-              <div className="mt-4">
-                <p className="text-sm text-gray-600">{job.description}</p>
+                  {/* Eligible branches */}
+                  {job.eligibility?.branches?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {job.eligibility.branches.map((b) => (
+                        <span key={b} className="badge badge-blue">{b}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {job.description && (
+                    <p className="text-sm text-white/40 mt-3 line-clamp-2">{job.description}</p>
+                  )}
+                </div>
+
+                {/* Apply button */}
+                <div className="shrink-0">
+                  {applied ? (
+                    <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4" /> Applied
+                    </div>
+                  ) : (
+                    <button
+                      disabled={isPending}
+                      onClick={() => applyMut.mutate(job._id)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500
+                        disabled:opacity-60 text-sm font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
+                    >
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Apply
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

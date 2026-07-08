@@ -1,189 +1,211 @@
+/**
+ * StudentApplications — Track own application statuses.
+ * Wired to real API via React Query.
+ */
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  FileText,
-  Building2,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Clock as ClockIcon,
-  Search,
-  Filter,
+  FileText, Briefcase, Clock, CheckCircle, XCircle,
+  Star, Search, Loader2, IndianRupee, Calendar,
 } from "lucide-react";
+import { getMyApplications } from "../../api";
+
+const STATUS_CONFIG = {
+  Applied:     { badge: "badge-blue",   icon: Clock,         label: "Applied"     },
+  Shortlisted: { badge: "badge-yellow", icon: Star,          label: "Shortlisted" },
+  Hired:       { badge: "badge-green",  icon: CheckCircle,   label: "Hired 🎉"    },
+  Rejected:    { badge: "badge-red",    icon: XCircle,       label: "Rejected"    },
+};
+
+const TIMELINE_STEPS = ["Applied", "Shortlisted", "Hired"];
+
+function Timeline({ status }) {
+  const activeIdx = TIMELINE_STEPS.indexOf(status === "Rejected" ? "Applied" : status);
+  const isRejected = status === "Rejected";
+
+  return (
+    <div className="flex items-center gap-0 mt-3">
+      {TIMELINE_STEPS.map((step, i) => {
+        const done  = !isRejected && i <= activeIdx;
+        const isCur = !isRejected && i === activeIdx;
+        return (
+          <React.Fragment key={step}>
+            <div className="flex flex-col items-center">
+              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all
+                ${done
+                  ? isCur
+                    ? "bg-indigo-600 text-white ring-2 ring-indigo-500/40"
+                    : "bg-emerald-600/80 text-white"
+                  : "bg-white/10 text-white/30"
+                }`}>
+                {i + 1}
+              </div>
+              <p className={`text-[9px] mt-1 font-medium ${done ? "text-white/50" : "text-white/20"}`}>{step}</p>
+            </div>
+            {i < TIMELINE_STEPS.length - 1 && (
+              <div className={`h-px flex-1 mb-4 transition-colors ${i < activeIdx && !isRejected ? "bg-emerald-600/50" : "bg-white/10"}`} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
 
 export function StudentApplications() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [search, setSearch]   = useState("");
+  const [statusF, setStatusF] = useState("all");
 
-  const applications = [
-    {
-      id: 1,
-      jobTitle: "Software Engineer",
-      company: "Google",
-      appliedDate: "2024-03-15",
-      status: "Pending",
-      lastUpdated: "2024-03-16",
-      resume: "resume.pdf",
-    },
-    {
-      id: 2,
-      jobTitle: "Product Manager",
-      company: "Microsoft",
-      appliedDate: "2024-03-10",
-      status: "Shortlisted",
-      lastUpdated: "2024-03-12",
-      resume: "resume.pdf",
-    },
-    {
-      id: 3,
-      jobTitle: "Data Scientist",
-      company: "Amazon",
-      appliedDate: "2024-03-05",
-      status: "Rejected",
-      lastUpdated: "2024-03-08",
-      resume: "resume.pdf",
-    },
-  ];
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["myApplications"],
+    queryFn:  getMyApplications,
+  });
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "Shortlisted":
-        return "bg-green-100 text-green-800";
-      case "Rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  const apps = (data?.data ?? []).filter((a) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q
+      || a.job?.title?.toLowerCase().includes(q)
+      || a.job?.companyName?.toLowerCase().includes(q);
+    const matchStatus = statusF === "all" || a.status === statusF;
+    return matchSearch && matchStatus;
+  });
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "Pending":
-        return <ClockIcon className="h-4 w-4" />;
-      case "Shortlisted":
-        return <CheckCircle className="h-4 w-4" />;
-      case "Rejected":
-        return <XCircle className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
+  // Summary counts
+  const counts = (data?.data ?? []).reduce((acc, a) => {
+    acc[a.status] = (acc[a.status] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search applications..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="shortlisted">Shortlisted</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">My Applications</h1>
+        <p className="text-sm text-white/40 mt-0.5">Track the status of your job applications</p>
       </div>
 
-      {/* Applications Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Job Details
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Applied Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Updated
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Resume
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {applications.map((application) => (
-                <tr key={application.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {application.jobTitle}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {application.company}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {application.appliedDate}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                        application.status
-                      )}`}
-                    >
-                      {getStatusIcon(application.status)}
-                      <span className="ml-1">{application.status}</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {application.lastUpdated}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <a
-                      href="#"
-                      className="text-sm text-blue-600 hover:text-blue-900"
-                    >
-                      View Resume
-                    </a>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button className="text-blue-600 hover:text-blue-900 mr-4">
-                      View Details
-                    </button>
-                    <button className="text-red-600 hover:text-red-900">
-                      Withdraw
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Summary badges */}
+      {!isLoading && data?.data?.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(STATUS_CONFIG).map(([s, conf]) => (
+            <button
+              key={s}
+              onClick={() => setStatusF(statusF === s ? "all" : s)}
+              className={`badge ${conf.badge} ${statusF === s ? "ring-2 ring-white/20" : ""} cursor-pointer transition-all`}
+            >
+              {counts[s] ?? 0} {conf.label}
+            </button>
+          ))}
         </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by job or company…"
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm
+              text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+          />
+        </div>
+        <select
+          value={statusF}
+          onChange={(e) => setStatusF(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white/70
+            focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+        >
+          <option value="all">All Status</option>
+          {Object.keys(STATUS_CONFIG).map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* States */}
+      {isLoading && (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-7 w-7 animate-spin text-indigo-400" />
+        </div>
+      )}
+      {isError && (
+        <div className="card border-red-500/30 bg-red-500/10 flex items-center gap-2 text-red-400 text-sm">
+          <XCircle className="h-4 w-4" /> Failed to load applications
+        </div>
+      )}
+      {!isLoading && apps.length === 0 && (
+        <div className="card flex flex-col items-center py-14 text-white/30">
+          <FileText className="h-12 w-12 mb-3" />
+          <p className="text-sm">
+            {data?.data?.length === 0 ? "You haven't applied to any jobs yet" : "No applications match your filter"}
+          </p>
+        </div>
+      )}
+
+      {/* Application cards */}
+      <div className="space-y-4">
+        {apps.map((app) => {
+          const cfg = STATUS_CONFIG[app.status] ?? STATUS_CONFIG.Applied;
+          const Icon = cfg.icon;
+          const isHired = app.status === "Hired";
+
+          return (
+            <div
+              key={app.id}
+              className={`card hover:border-white/20 transition-all duration-200
+                ${isHired ? "border-emerald-500/25 bg-emerald-500/5" : ""}`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  {/* Job info */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-semibold text-white text-sm">{app.job?.title ?? "Job"}</h2>
+                    <span className={`badge ${cfg.badge} flex items-center gap-1`}>
+                      <Icon className="h-3 w-3" /> {app.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-indigo-400 mt-0.5">{app.job?.companyName}</p>
+
+                  {/* Meta */}
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-white/40">
+                    {app.job?.packageLPA && (
+                      <span className="flex items-center gap-1">
+                        <IndianRupee className="h-3 w-3" /> {app.job.packageLPA} LPA
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Applied:{" "}
+                      {app.appliedAt
+                        ? new Date(app.appliedAt).toLocaleDateString("en-IN", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })
+                        : "—"}
+                    </span>
+                  </div>
+
+                  {/* Progress timeline */}
+                  {app.status !== "Rejected" && (
+                    <Timeline status={app.status} />
+                  )}
+                  {app.status === "Rejected" && (
+                    <p className="mt-2 text-xs text-red-400/70">
+                      This application was not taken forward.
+                    </p>
+                  )}
+                </div>
+
+                {/* Side icon */}
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0
+                  ${isHired ? "bg-emerald-500/15" : "bg-white/5"}`}>
+                  <Briefcase className={`h-5 w-5 ${isHired ? "text-emerald-400" : "text-white/30"}`} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
